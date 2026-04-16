@@ -79,6 +79,10 @@ class App {
                 this.pageTitle.innerText = 'Radar Feed';
                 this.renderOpportunities();
                 break;
+            case 'learning':
+                this.pageTitle.innerText = 'Skill Up Hub';
+                this.renderLearning();
+                break;
             case 'profile':
                 this.pageTitle.innerText = 'My Profile';
                 this.renderProfile();
@@ -201,8 +205,16 @@ class App {
             <div class="grid-cards" style="margin-bottom: 2rem;">
                 ${topMatches.slice(0, 3).map(opp => this.renderOpportunityCard(opp)).join('')}
             </div>
-            
-            <h3 style="margin-bottom:1rem;">Skill Up: Recommended Learning</h3>
+        `;
+        this.attachCardListeners();
+    }
+
+    renderLearning() {
+        this.viewContainer.innerHTML = `
+            <div class="view-header">
+                <h2 class="view-title">Skill Up Hub</h2>
+                <p class="view-subtitle">Discover high-quality free and paid courses mapped to your exact career trajectory.</p>
+            </div>
             ${this.renderLearningHub()}
         `;
         this.attachCardListeners();
