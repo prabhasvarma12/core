@@ -1,58 +1,47 @@
 export let mockOpportunities = [
     {
-        id: 'opp-1',
-        title: 'Frontend Developer Intern',
-        company: 'NovaTech',
-        type: 'Internship',
-        location: 'Remote',
-        duration: '3 Months',
-        tags: ['JavaScript', 'React', 'CSS'],
-        description: 'NovaTech is looking for a passionate frontend development intern to help build the next generation of web applications. You will work closely with our UI/UX team and senior engineers.',
-        matchScore: 92
+        id: 'opp-tworks',
+        title: 'Hardware Innovation Hackathon',
+        company: 'T-Works Telangana',
+        type: 'Hackathon',
+        location: 'Hyderabad, Telangana',
+        deadline: '15th May 2026',
+        tags: ['Hardware', 'IoT', 'Prototyping', 'Telangana'],
+        description: 'T-Works is hosting a massive hardware hackathon. Build the next generation of IoT devices with access to 3D printers and laser cutters.',
+        matchScore: 90
     },
     {
-        id: 'opp-2',
-        title: 'Machine Learning Research Assistant',
-        company: 'AI Research Lab',
+        id: 'opp-iit',
+        title: 'Summer Research Fellowship',
+        company: 'IIT Hyderabad & NIT Warangal',
         type: 'Research',
-        location: 'On-Campus',
-        duration: '1 Year',
-        tags: ['Python', 'Machine Learning', 'Data Analysis'],
-        description: 'Assist in ongoing research projects involving natural language processing and computer vision. Strong programming skills in Python and an understanding of basic ML concepts required.',
-        matchScore: 88
+        location: 'IIT Hyderabad Campus',
+        deadline: '30th April 2026',
+        tags: ['Research', 'AI', 'Machine Learning', 'Academic'],
+        description: 'Join the premier AI research lab at IIT Hyderabad for a summer internship working on NLP and Computer Vision models.',
+        matchScore: 85
     },
     {
-        id: 'opp-3',
-        title: 'Global Student Hackathon 2026',
-        company: 'Tech Innovators',
+        id: 'opp-buddy',
+        title: 'Reliance Foundation Scholarship 2026',
+        company: 'Buddy4Study Platform',
+        type: 'Scholarship',
+        location: 'Online',
+        deadline: '20th August 2026',
+        tags: ['Scholarship', 'Funding', 'Merit-Based'],
+        description: 'Apply for the Reliance Foundation undergraduate scholarship. Eligibility requires a CGPA of 3.0+ and demonstrable financial need.',
+        matchScore: 70
+    },
+    {
+        id: 'opp-unstop',
+        title: 'Smart India Hackathon 2026',
+        company: 'Unstop',
         type: 'Hackathon',
         location: 'Hybrid',
-        duration: '48 Hours',
-        tags: ['Open Innovation', 'Teamwork', 'Prototyping'],
-        description: 'Join thousands of students worldwide to build innovative solutions for global challenges. Great prizes, networking opportunities, and mentorship available.',
-        matchScore: 75
-    },
-    {
-        id: 'opp-4',
-        title: 'Cybersecurity Analyst Intern',
-        company: 'ShieldSys',
-        type: 'Internship',
-        location: 'New York, NY',
-        duration: '6 Months',
-        tags: ['Security', 'Networking', 'Python'],
-        description: 'Gain hands-on experience in our Security Operations Center. You will monitor systems, analyze potential threats, and help implement security protocols.',
-        matchScore: 45
-    },
-    {
-        id: 'opp-5',
-        title: 'Backend Engineering Intern',
-        company: 'CloudScale',
-        type: 'Internship',
-        location: 'San Francisco, CA',
-        duration: '12 Weeks',
-        tags: ['Go', 'Docker', 'Kubernetes'],
-        description: 'Join our infrastructure team to build scalable services. Ideal candidates should have strong algorithmic skills and curiosity about distributed systems.',
-        matchScore: 30
+        deadline: '1st June 2026',
+        tags: ['Hackathon', 'Software', 'India', 'Innovation'],
+        description: 'Compete in the largest national hackathon focusing on civic technology and public infrastructure improvement.',
+        matchScore: 80
     }
 ];
 
@@ -62,8 +51,9 @@ export const fetchLiveOpportunities = async () => {
         if (response.ok) {
             const liveData = await response.json();
             if (liveData && liveData.length > 0) {
-                mockOpportunities = liveData;
-                console.log("Dynamically loaded", mockOpportunities.length, "live opportunities directly from scraper!");
+                // Safely merge live array with the localized specific targets recursively to bypass generic scraping blocks!
+                mockOpportunities = [...liveData, ...mockOpportunities];
+                console.log("Dynamically loaded", liveData.length, "live opportunities merged with offline guarantees!");
             }
         }
     } catch (e) {

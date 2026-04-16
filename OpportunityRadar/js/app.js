@@ -106,16 +106,22 @@ class App {
         }
 
         return filtered.map(opp => {
-            let score = 50;
+            let score = opp.matchScore || 50;
             const oppTags = opp.tags.map(t => t.toLowerCase());
-            const matchedSkills = oppTags.filter(t => profileSkills.some(ps => t.includes(ps) || ps.includes(t)));
+            const desc = (opp.description || "").toLowerCase();
+
+            // Fix: Check if User Skills appear in EITHER the generic tags or the deep scraped description
+            const matchedSkills = profileSkills.filter(ps =>
+                oppTags.some(t => t.includes(ps) || ps.includes(t)) ||
+                desc.includes(ps)
+            );
+
             score += (matchedSkills.length * 15);
             if (profileGoals.some(g => opp.title.toLowerCase().includes(g) || opp.type.toLowerCase().includes(g))) {
                 score += 20;
             }
 
             // Advanced Eligibility Checkings
-            const desc = (opp.description || "").toLowerCase();
             const cgpaMatch = desc.match(/(\d\.\d)\+?\s*gpa/i);
             if (cgpaMatch) {
                 const reqCgpa = parseFloat(cgpaMatch[1]);
@@ -140,13 +146,19 @@ class App {
         return `
             <div class="card" data-id="${opp.id}">
                 <div style="display:flex; justify-content:space-between; margin-bottom: 1rem;">
-                    <span style="background: rgba(59,130,246,0.1); color: var(--brand-primary); padding: 0.25rem 0.5rem; border-radius:1rem; font-size:0.75rem; font-weight:700;">${opp.type}</span>
+                    <div style="display:flex; gap:0.5rem;">
+                        <span style="background: rgba(59,130,246,0.1); color: var(--brand-primary); padding: 0.25rem 0.5rem; border-radius:1rem; font-size:0.75rem; font-weight:700;">${opp.type}</span>
+                        ${opp.salary && opp.salary !== 'Unknown' ? `<span style="background: rgba(16,185,129,0.1); color: var(--success); padding: 0.25rem 0.5rem; border-radius:1rem; font-size:0.75rem; font-weight:700;">${opp.salary}</span>` : ''}
+                    </div>
                     <button class="icon-btn save-btn" data-id="${opp.id}" style="width:32px; height:32px;">
                        <i data-lucide="bookmark" fill="${isSaved ? 'var(--brand-primary)' : 'none'}" color="${isSaved ? 'var(--brand-primary)' : 'var(--text-secondary)'}"></i>
                     </button>
                 </div>
                 <h3 style="font-size:1.125rem; font-weight:700; margin-bottom:0.25rem;">${opp.title}</h3>
-                <p style="color:var(--text-secondary); font-size:0.875rem; margin-bottom:1rem;">${opp.company} • ${opp.location}</p>
+                <p style="color:var(--text-secondary); font-size:0.875rem; margin-bottom:0.5rem;">${opp.company} • ${opp.location}</p>
+                <div style="font-size:0.75rem; color:var(--text-primary); font-weight:600; margin-bottom:1rem; display:flex; align-items:center; gap:0.25rem;">
+                     <i data-lucide="calendar" style="width:14px; height:14px;"></i> Deadline: <span style="color:var(--danger);">${opp.deadline || 'Rolling Registration'}</span>
+                </div>
                 
                 <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
                     ${opp.tags.map(t => `<span style="font-size:0.75rem; border:1px solid var(--border-color); padding: 0.25rem 0.5rem; border-radius: 4px;">${t}</span>`).join('')}
@@ -163,7 +175,7 @@ class App {
     }
 
     renderFilterRibbon() {
-        const filters = ['All', 'Internship', 'Hackathon'];
+        const filters = ['All', 'Internship', 'Hackathon', 'Scholarship', 'Research'];
         return `
             <div class="filters-ribbon" style="display:flex; gap:0.5rem; margin-bottom: 1.5rem;">
                ${filters.map(f => `
@@ -388,7 +400,7 @@ class App {
                             <button class="icon-btn close-modal"><i data-lucide="x"></i></button>
                         </div>
                         <div class="modal-body">
-                            <p>${opp.description}</p>
+                            <div style="white-space: pre-wrap; font-size: 0.95rem; line-height: 1.6; padding: 1rem; background: var(--bg-secondary); border-radius: 0.5rem; border: 1px solid var(--border-color); color: var(--text-secondary); max-height: 300px; overflow-y: auto;">${opp.description}</div>
                             <div style="margin-top:1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
                                 ${opp.tags.map(t => `<span style="font-size:0.75rem; border:1px solid var(--border-color); padding: 0.25rem 0.5rem; border-radius: 4px;">${t}</span>`).join('')}
                             </div>

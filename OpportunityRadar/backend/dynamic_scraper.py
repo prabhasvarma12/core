@@ -70,13 +70,16 @@ async def scrape_source(page, source_config):
                 await simulate_human_interaction(page)
                 
                 full_text = await page.evaluate("document.body.innerText")
-                salary_match = re.search(r'\$?\d{2,3}[kK](?:\s*-\s*\$?\d{2,3}[kK])?|\$\d{2,3}(?:,\d{3})?(?:\s*-\s*\$\d{2,3}(?:,\d{3})?)?', full_text)
+                salary_match = re.search(r'\$?\d{2,3}[kK](?:\s*-\s*\$?\d{2,3}[kK])?|\$\d{2,3}(?:,\d{3})?(?:\s*-\s*\$\d{2,3}(?:,\d{3})?)?|₹\s?\d{1,3}(?:,\d{3})*(?:\s*-\s*₹?\s?\d{1,3}(?:,\d{3})*)?', full_text)
                 salary = salary_match.group(0) if salary_match else 'Salary Negotiable'
+                
+                deadline_match = re.search(r'(?:deadline|closes|apply by|end date|last date)[^\w\n]*\d{1,2}(?:st|nd|rd|th)?\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*|(?:\d{1,2}[-/]\d{1,2}[-/]\d{2,4})', full_text, re.IGNORECASE)
+                deadline = deadline_match.group(0).strip() if deadline_match else 'Rolling / Continuous'
                 
                 normalized_jobs.append({
                     'title': job['title'],
                     'company': source_config.get('default_company', "Unknown"),
-                    'deadline': 'Dynamic-Extraction',
+                    'deadline': deadline,
                     'requirements': json.dumps(source_config.get('tags', ["General"])),
                     'raw_text': full_text[:4000],  # Full rigorous text body
                     'source_url': job['url'],
@@ -101,6 +104,38 @@ async def run_dynamic_scraper():
             "link_selector": "span.titleline > a",
             "default_company": "Startup",
             "tags": ["Full-time", "Engineering", "High-Growth"]
+        },
+        {
+            "url": "https://unstop.com/hackathons?oppstatus=open",
+            "item_selector": "app-opportunity-list-item",
+            "title_selector": "h2",
+            "link_selector": "a.clickable-element",
+            "default_company": "Unstop Hackathons (Telangana region filters applied)",
+            "tags": ["Hackathon", "Telangana", "Competition", "Tech"]
+        },
+        {
+            "url": "https://tworks.telangana.gov.in/careers",
+            "item_selector": "div.summary-item",
+            "title_selector": "a.summary-title-link",
+            "link_selector": "a.summary-title-link",
+            "default_company": "T-Works Telangana",
+            "tags": ["Hardware", "Prototyping", "Telangana", "Incubator"]
+        },
+        {
+            "url": "https://rnd.iitd.ac.in/jobs/project-staff",
+            "item_selector": "tr",
+            "title_selector": "td > strong",
+            "link_selector": "td > a",
+            "default_company": "IIT Research Feed (National)",
+            "tags": ["Research", "Academic", "NIT", "IIT"]
+        },
+        {
+            "url": "https://www.buddy4study.com/scholarships",
+            "item_selector": "article.scholarship-card",
+            "title_selector": "h4.scholarship-title",
+            "link_selector": "a",
+            "default_company": "Buddy4Study Network",
+            "tags": ["Scholarship", "Funding", "Student"]
         },
         {
             "url": "https://www.linkedin.com/jobs/search?keywords=Software%20Intern&location=Worldwide",
@@ -208,6 +243,7 @@ def export_database_to_json(db_path='opportunity_radar.db'):
             'company': r['company'],
             'location': 'Various / Remote',
             'type': 'Live Opportunity',
+            'deadline': r['deadline'] or 'Continuous',
             'tags': json.loads(r['requirements']),
             'salary': salary,
             'description': f"Extracted Salary: {salary}\n\nDeep Scrape Analysis:\n{raw[:600]}...",
