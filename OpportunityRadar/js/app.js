@@ -5,6 +5,7 @@ import { aiAgent } from './ai-agent.js';
 class App {
     constructor() {
         this.currentView = 'dashboard';
+        this.currentFilter = 'All';
         this.viewContainer = document.getElementById('view-container');
         this.pageTitle = document.getElementById('page-title');
         this.themeToggle = document.querySelector('.theme-toggle');
@@ -94,7 +95,17 @@ class App {
     getRankedOpportunities() {
         const profileSkills = store.profile.skills.map(s => s.toLowerCase());
         const profileGoals = store.profile.goals.map(g => g.toLowerCase());
-        return mockOpportunities.map(opp => {
+        const userCgpa = parseFloat(store.profile.cgpa) || 0.0;
+
+        let filtered = mockOpportunities;
+        if (this.currentFilter !== 'All') {
+            filtered = filtered.filter(o => {
+                const searchStr = (o.type + o.title + o.tags.join(' ')).toLowerCase();
+                return searchStr.includes(this.currentFilter.toLowerCase());
+            });
+        }
+
+        return filtered.map(opp => {
             let score = 50;
             const oppTags = opp.tags.map(t => t.toLowerCase());
             const matchedSkills = oppTags.filter(t => profileSkills.some(ps => t.includes(ps) || ps.includes(t)));
@@ -102,7 +113,22 @@ class App {
             if (profileGoals.some(g => opp.title.toLowerCase().includes(g) || opp.type.toLowerCase().includes(g))) {
                 score += 20;
             }
-            score = Math.min(score, 99);
+
+            // Advanced Eligibility Checkings
+            const desc = (opp.description || "").toLowerCase();
+            const cgpaMatch = desc.match(/(\d\.\d)\+?\s*gpa/i);
+            if (cgpaMatch) {
+                const reqCgpa = parseFloat(cgpaMatch[1]);
+                if (userCgpa >= reqCgpa) {
+                    score += 15;
+                } else {
+                    score -= 40; // Unmet strict hard eligibility penalty
+                }
+            }
+            // Penalty if user is Junior but requires PhD
+            if (desc.includes("phd") && !store.profile.year.toLowerCase().includes("phd")) score -= 30;
+
+            score = Math.max(1, Math.min(score, 99));
             return { ...opp, dynamicScore: score };
         }).sort((a, b) => b.dynamicScore - a.dynamicScore);
     }
@@ -136,6 +162,17 @@ class App {
         `;
     }
 
+    renderFilterRibbon() {
+        const filters = ['All', 'Internship', 'Hackathon'];
+        return `
+            <div class="filters-ribbon" style="display:flex; gap:0.5rem; margin-bottom: 1.5rem;">
+               ${filters.map(f => `
+                  <button class="btn btn-secondary filter-btn ${this.currentFilter === f ? 'active' : ''}" style="${this.currentFilter === f ? 'background:rgba(59,130,246,0.1); color:var(--brand-primary);' : ''}" data-type="${f}">${f}</button>
+               `).join('')}
+            </div>
+        `;
+    }
+
     renderDashboard() {
         const ranked = this.getRankedOpportunities();
         const topMatches = ranked.filter(o => o.dynamicScore > 75);
@@ -145,6 +182,8 @@ class App {
                 <h2 class="view-title">Welcome back, ${store.profile.name.split(' ')[0]}!</h2>
                 <p class="view-subtitle">Your radar has found ${topMatches.length} highly matching opportunities today.</p>
             </div>
+            
+            ${this.renderFilterRibbon()}
             
             <h3 style="margin-bottom:1rem;">Top Radar Picks For You</h3>
             <div class="grid-cards">
@@ -161,6 +200,7 @@ class App {
                 <h2 class="view-title">Opportunity Radar Feed</h2>
                 <p class="view-subtitle">Ranked based on your profile skills and goals.</p>
             </div>
+            ${this.renderFilterRibbon()}
             <div class="grid-cards">
                 ${ranked.map(opp => this.renderOpportunityCard(opp)).join('')}
             </div>
@@ -215,7 +255,8 @@ class App {
                 
                 <div style="display: flex; gap: 1rem; align-items: center;">
                     <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Save Profile</button>
-                    <div class="upload-placeholder" style="font-size: 0.875rem; color: var(--text-tertiary); display:flex; align-items:center; gap:0.5rem; cursor:pointer;" onclick="alert('Resume upload will parse PDF to text automatically in final implementation.')">
+                    <input type="file" id="resume-upload" accept="application/pdf" style="display:none">
+                    <div id="upload-btn" class="upload-placeholder" style="font-size: 0.875rem; color: var(--text-tertiary); display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
                        <i data-lucide="upload-cloud"></i> Upload PDF Resume (Auto-Parse)
                     </div>
                 </div>
@@ -237,6 +278,45 @@ class App {
                     resumeText: document.getElementById('prof-resume').value
                 });
                 alert('Profile saved successfully! Radar matching logic will now use updated parameters.');
+                this.updateSidebarProfile();
+            });
+        }
+
+        const uploadBtn = document.getElementById('upload-btn');
+        const fileInput = document.getElementById('resume-upload');
+        if (uploadBtn && fileInput) {
+            uploadBtn.onclick = () => fileInput.click();
+            fileInput.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                uploadBtn.innerHTML = `<i data-lucide="loader" class="spin"></i> Parsing PDF...`;
+                lucide.createIcons();
+                try {
+                    const pdfjsLib = window['pdfjs-dist/build/pdf'];
+                    if (!pdfjsLib) throw new Error("PDF.js not loaded by browser");
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+                    const fileReader = new FileReader();
+                    fileReader.onload = async function () {
+                        const typedarray = new Uint8Array(this.result);
+                        const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                        let fullText = "";
+                        for (let i = 1; i <= pdf.numPages; i++) {
+                            const page = await pdf.getPage(i);
+                            const textContent = await page.getTextContent();
+                            fullText += textContent.items.map(s => s.str).join(' ');
+                        }
+                        const resInput = document.getElementById('prof-resume');
+                        resInput.value = fullText.slice(0, 5000); // 5000 chars safety
+                        uploadBtn.innerHTML = `<i data-lucide="check" style="color:var(--success)"></i> Parsed Successfully!`;
+                        lucide.createIcons();
+                    };
+                    fileReader.readAsArrayBuffer(file);
+                } catch (err) {
+                    console.error(err);
+                    uploadBtn.innerHTML = `<i data-lucide="x" style="color:var(--danger)"></i> Parse Failed`;
+                    lucide.createIcons();
+                }
             });
         }
     }
@@ -277,6 +357,14 @@ class App {
             btn.addEventListener('click', (e) => {
                 const id = btn.getAttribute('data-id');
                 this.openOpportunityDetailsModal(id);
+            });
+        });
+
+        const filterBtns = this.viewContainer.querySelectorAll('.filter-btn');
+        filterBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.currentFilter = btn.getAttribute('data-type');
+                this.renderView(this.currentView);
             });
         });
     }

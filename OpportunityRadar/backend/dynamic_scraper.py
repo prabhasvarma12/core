@@ -9,7 +9,24 @@ async def random_delay(min_sec=1.5, max_sec=4.5):
     print(f"Waiting {delay:.2f} seconds to simulate human behavior...")
     await asyncio.sleep(delay)
 
+async def mask_webdriver(page):
+    await page.add_init_script("""
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+        window.navigator.chrome = { runtime: {} };
+    """)
+
+async def simulate_human_interaction(page):
+    print("Simulating human mouse movements and scroll...")
+    for _ in range(3):
+        x = random.randint(100, 800)
+        y = random.randint(100, 600)
+        await page.mouse.move(x, y, steps=10)
+        await asyncio.sleep(random.uniform(0.1, 0.4))
+    await page.evaluate("window.scrollBy(0, window.innerHeight / 2)")
+    await random_delay(0.5, 1.5)
+
 async def scrape_source(page, source_config):
+    await mask_webdriver(page)
     print(f"Navigating to {source_config['url']}...")
     try:
         await page.goto(source_config['url'], wait_until="domcontentloaded", timeout=15000)
@@ -35,27 +52,42 @@ async def scrape_source(page, source_config):
                 let titleText = titleNode.innerText || titleNode.textContent;
                 data.push({
                     title: titleText.trim(),
-                    url: linkNode ? linkNode.href : window.location.href
+                    url: linkNode ? linkNode.href : window.location.href,
+                    raw_text: item.innerText || ''
                 });
             });
             return data;
         }''', [source_config['item_selector'], source_config['title_selector'], source_config['link_selector']])
         
-        print(f"Successfully scraped {len(jobs_data)} elements from {source_config['url']}.")
+        print(f"Successfully scraped {len(jobs_data)} elements from {source_config['url']}. Entering Deep Crawl for top 3 hits...")
         
         normalized_jobs = []
-        for job in jobs_data:
-            normalized_jobs.append({
-                'title': job['title'],
-                'company': source_config.get('default_company', "Unknown"),
-                'deadline': 'Dynamic-Extraction',
-                'requirements': json.dumps(source_config.get('tags', ["General"])),
-                'raw_text': job['title'],
-                'source_url': job['url']
-            })
+        import re
+        for job in jobs_data[:3]: # Cap to 3 to prevent timeouts but fetch FULL data!
+            try:
+                print(f"Deep crawling: {job['url']}")
+                await page.goto(job['url'], wait_until="domcontentloaded", timeout=15000)
+                await simulate_human_interaction(page)
+                
+                full_text = await page.evaluate("document.body.innerText")
+                salary_match = re.search(r'\$?\d{2,3}[kK](?:\s*-\s*\$?\d{2,3}[kK])?|\$\d{2,3}(?:,\d{3})?(?:\s*-\s*\$\d{2,3}(?:,\d{3})?)?', full_text)
+                salary = salary_match.group(0) if salary_match else 'Salary Negotiable'
+                
+                normalized_jobs.append({
+                    'title': job['title'],
+                    'company': source_config.get('default_company', "Unknown"),
+                    'deadline': 'Dynamic-Extraction',
+                    'requirements': json.dumps(source_config.get('tags', ["General"])),
+                    'raw_text': full_text[:4000],  # Full rigorous text body
+                    'source_url': job['url'],
+                    'salary': salary
+                })
+            except Exception as deep_e:
+                print(f"Deep crawl failed {job['url']}, skipping...")
+        
         return normalized_jobs
     except Exception as e:
-        print(f"Failed to scrape {source_config['url']}: {e}")
+        print(f"Failed to scrape index {source_config['url']}: {e}")
         return []
 
 async def run_dynamic_scraper():
@@ -135,10 +167,12 @@ def save_to_database(jobs, db_path='opportunity_radar.db'):
     for job in jobs:
         cursor.execute('SELECT id FROM opportunities WHERE title = ? AND source_url = ?', (job['title'], job['source_url']))
         if cursor.fetchone() is None:
+            # We append Salary to the raw text payload to avoid schema migration overhead
+            composite_text = f"SALARY: {job.get('salary', 'Unknown')} | {job['raw_text']}"
             cursor.execute('''
                 INSERT INTO opportunities (title, company, deadline, requirements, raw_text, source_url)
                 VALUES (?, ?, ?, ?, ?, ?)
-            ''', (job['title'], job['company'], job['deadline'], job['requirements'], job['raw_text'], job['source_url']))
+            ''', (job['title'], job['company'], job['deadline'], job['requirements'], composite_text, job['source_url']))
             inserted += 1
             
     conn.commit()
@@ -159,6 +193,15 @@ def export_database_to_json(db_path='opportunity_radar.db'):
     frontend_data = []
     for r in rows:
         domain = r['source_url'].split('/')[2] if '/' in r['source_url'] else "external site"
+        
+        # safely extract prepended salary
+        raw = r['raw_text'] or ''
+        salary = "Competitive"
+        if "SALARY: " in raw:
+            parts = raw.split(" | ", 1)
+            salary = parts[0].replace("SALARY: ", "")
+            raw = parts[1] if len(parts) > 1 else raw
+
         frontend_data.append({
             'id': str(r['id']),
             'title': r['title'],
@@ -166,7 +209,8 @@ def export_database_to_json(db_path='opportunity_radar.db'):
             'location': 'Various / Remote',
             'type': 'Live Opportunity',
             'tags': json.loads(r['requirements']),
-            'description': f"This role was dynamically discovered via our active crawler scanning {domain}. Please click 'Apply Here' to navigate to the original listing and review the full job requirements and explicit qualifications.",
+            'salary': salary,
+            'description': f"Extracted Salary: {salary}\n\nDeep Scrape Analysis:\n{raw[:600]}...",
             'source_url': r['source_url'],
             'url': r['source_url']
         })

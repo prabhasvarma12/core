@@ -1,6 +1,9 @@
 // Local store for managing states
+const savedProfile = localStorage.getItem('opRadar_profile');
+const savedOpportunities = localStorage.getItem('opRadar_saved');
+
 const store = {
-    profile: {
+    profile: savedProfile ? JSON.parse(savedProfile) : {
         name: 'Student User',
         university: 'State University',
         branch: 'Computer Science',
@@ -8,9 +11,9 @@ const store = {
         cgpa: '3.8',
         skills: ['JavaScript', 'React', 'Python', 'Machine Learning', 'Data Analysis'],
         goals: ['Find a Summer Internship', 'Gain practical AI experience'],
-        resumeText: 'Experienced computer science student with a passion for web development and AI. Built multiple open-source projects including a task manager using React and a sentiment analysis model using Python. Coursework includes Data Structures, Algorithms, Machine Learning.'
+        resumeText: 'Experienced computer science student with a passion for web development and AI.'
     },
-    savedOpportunities: [],
+    savedOpportunities: savedOpportunities ? JSON.parse(savedOpportunities) : [],
     engagementData: {
         viewedIds: [],
         appliedIds: []
@@ -27,18 +30,21 @@ const store = {
 
     saveProfile(newProfile) {
         this.profile = { ...this.profile, ...newProfile };
+        localStorage.setItem('opRadar_profile', JSON.stringify(this.profile));
         this.notify();
     },
 
     saveOpportunity(id) {
         if (!this.savedOpportunities.includes(id)) {
             this.savedOpportunities.push(id);
+            localStorage.setItem('opRadar_saved', JSON.stringify(this.savedOpportunities));
             this.notify();
         }
     },
 
     removeOpportunity(id) {
         this.savedOpportunities = this.savedOpportunities.filter(oppId => oppId !== id);
+        localStorage.setItem('opRadar_saved', JSON.stringify(this.savedOpportunities));
         this.notify();
     },
 

@@ -1,23 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OpportunityRadar</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="styles/main.css">
+    <!-- PDF.js for resume auto parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <!-- Lucide icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
+
 <body>
     <div id="app" class="app-layout">
         <!-- Sidebar -->
         <aside class="sidebar glass-panel">
             <div class="logo-area">
-               <div class="logo-icon"><i data-lucide="radar"></i></div>
-               <div class="logo-text">Opportunity<span>Radar</span></div>
+                <div class="logo-icon"><i data-lucide="radar"></i></div>
+                <div class="logo-text">Opportunity<span>Radar</span></div>
             </div>
             <nav class="main-nav">
                 <a href="#dashboard" class="nav-item active" data-view="dashboard">
@@ -26,21 +31,22 @@
                 <a href="#opportunities" class="nav-item" data-view="opportunities">
                     <i data-lucide="compass"></i> <span>Opportunities</span>
                 </a>
-                <a href="#profile" class="nav-item" data-view="profile">
-                    <i data-lucide="user"></i> <span>My Profile</span>
-                </a>
+
                 <a href="#saved" class="nav-item" data-view="saved">
                     <i data-lucide="bookmark"></i> <span>Saved</span>
                 </a>
             </nav>
             <div class="nav-bottom">
-                 <div class="profile-mini">
-                     <div class="avatar">SU</div>
-                     <div class="info">
-                         <div class="name">Student User</div>
-                         <div class="major">Computer Science</div>
-                     </div>
-                 </div>
+                <a href="#profile" class="nav-item" data-view="profile"
+                    style="display:block; padding:0; background:transparent;">
+                    <div class="profile-mini" style="cursor:pointer; transition: transform 0.2s ease;">
+                        <div class="avatar">SU</div>
+                        <div class="info">
+                            <div class="name">Student User</div>
+                            <div class="major">Computer Science</div>
+                        </div>
+                    </div>
+                </a>
             </div>
         </aside>
 
@@ -59,7 +65,7 @@
 
             <!-- View Container -->
             <div id="view-container" class="view-container">
-               <!-- Dynamic Content Rendered Here -->
+                <!-- Dynamic Content Rendered Here -->
             </div>
         </main>
     </div>
@@ -73,7 +79,8 @@
     <script src="js/ai-agent.js" type="module"></script>
     <script src="js/app.js" type="module"></script>
     <script>
-      lucide.createIcons();
+        lucide.createIcons();
     </script>
 </body>
+
 </html>
