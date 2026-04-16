@@ -1,5 +1,5 @@
 import store from './store.js';
-import { mockOpportunities } from './mockData.js';
+import { mockOpportunities, fetchLiveOpportunities } from './mockData.js';
 import { aiAgent } from './ai-agent.js';
 
 class App {
@@ -29,6 +29,12 @@ class App {
         this.setupNavigation();
         this.setupThemeToggle();
         this.renderView('dashboard');
+
+        fetchLiveOpportunities().then(() => {
+            if (window.app) {
+                window.app.renderView(window.app.currentView);
+            }
+        });
     }
 
     setupNavigation() {
@@ -303,8 +309,9 @@ class App {
                             ${draftingHTML}
                         </div>
                         <div class="modal-footer">
-                            <button class="btn btn-secondary run-audit-btn"><i data-lucide="sparkles" style="color:var(--brand-secondary)"></i> AI Audit Resume</button>
-                            <button class="btn btn-primary draft-letter-btn"><i data-lucide="pen-tool"></i> Draft Cover Letter</button>
+                            <a href="${opp.source_url || opp.url || '#'}" target="_blank" class="btn btn-primary" style="background: var(--success); align-self: center; margin-right: auto; text-decoration: none;"><i data-lucide="external-link"></i> Apply Here</a>
+                            <button class="btn btn-secondary run-audit-btn"><i data-lucide="sparkles" style="color:var(--brand-secondary)"></i> AI Audit</button>
+                            <button class="btn btn-primary draft-letter-btn"><i data-lucide="pen-tool"></i> Draft Letter</button>
                         </div>
                     </div>
                 </div>

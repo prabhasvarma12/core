@@ -1,4 +1,4 @@
-export const mockOpportunities = [
+export let mockOpportunities = [
     {
         id: 'opp-1',
         title: 'Frontend Developer Intern',
@@ -55,3 +55,18 @@ export const mockOpportunities = [
         matchScore: 30
     }
 ];
+
+export const fetchLiveOpportunities = async () => {
+    try {
+        const response = await fetch('js/liveData.json');
+        if (response.ok) {
+            const liveData = await response.json();
+            if (liveData && liveData.length > 0) {
+                mockOpportunities = liveData;
+                console.log("Dynamically loaded", mockOpportunities.length, "live opportunities directly from scraper!");
+            }
+        }
+    } catch (e) {
+        console.warn("No 'js/liveData.json' found, utilizing offline mocked array.", e);
+    }
+};
