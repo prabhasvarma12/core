@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpportunityRadar</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles/main.css">
+    <!-- Lucide icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div id="app" class="app-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar glass-panel">
+            <div class="logo-area">
+               <div class="logo-icon"><i data-lucide="radar"></i></div>
+               <div class="logo-text">Opportunity<span>Radar</span></div>
+            </div>
+            <nav class="main-nav">
+                <a href="#dashboard" class="nav-item active" data-view="dashboard">
+                    <i data-lucide="layout-dashboard"></i> <span>Dashboard</span>
+                </a>
+                <a href="#opportunities" class="nav-item" data-view="opportunities">
+                    <i data-lucide="compass"></i> <span>Opportunities</span>
+                </a>
+                <a href="#profile" class="nav-item" data-view="profile">
+                    <i data-lucide="user"></i> <span>My Profile</span>
+                </a>
+                <a href="#saved" class="nav-item" data-view="saved">
+                    <i data-lucide="bookmark"></i> <span>Saved</span>
+                </a>
+            </nav>
+            <div class="nav-bottom">
+                 <div class="profile-mini">
+                     <div class="avatar">SU</div>
+                     <div class="info">
+                         <div class="name">Student User</div>
+                         <div class="major">Computer Science</div>
+                     </div>
+                 </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="top-header glass-panel-subtle">
+                <div class="header-title">
+                    <h1 id="page-title">Dashboard</h1>
+                </div>
+                <div class="header-actions">
+                    <button class="icon-btn"><i data-lucide="bell"></i></button>
+                    <button class="icon-btn theme-toggle"><i data-lucide="moon"></i></button>
+                </div>
+            </header>
+
+            <!-- View Container -->
+            <div id="view-container" class="view-container">
+               <!-- Dynamic Content Rendered Here -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals and Overlays Container -->
+    <div id="modal-container"></div>
+
+    <!-- Scripts -->
+    <script src="js/mockData.js" type="module"></script>
+    <script src="js/store.js" type="module"></script>
+    <script src="js/ai-agent.js" type="module"></script>
+    <script src="js/app.js" type="module"></script>
+    <script>
+      lucide.createIcons();
+    </script>
+</body>
+</html>
