@@ -175,7 +175,7 @@ class App {
     }
 
     renderFilterRibbon() {
-        const filters = ['All', 'Internship', 'Hackathon', 'Scholarship', 'Research'];
+        const filters = ['All', 'Job', 'Internship', 'Hackathon', 'Scholarship', 'Research'];
         return `
             <div class="filters-ribbon" style="display:flex; gap:0.5rem; margin-bottom: 1.5rem;">
                ${filters.map(f => `
@@ -198,11 +198,52 @@ class App {
             ${this.renderFilterRibbon()}
             
             <h3 style="margin-bottom:1rem;">Top Radar Picks For You</h3>
-            <div class="grid-cards">
+            <div class="grid-cards" style="margin-bottom: 2rem;">
                 ${topMatches.slice(0, 3).map(opp => this.renderOpportunityCard(opp)).join('')}
             </div>
+            
+            <h3 style="margin-bottom:1rem;">Skill Up: Recommended Learning</h3>
+            ${this.renderLearningHub()}
         `;
         this.attachCardListeners();
+    }
+
+    renderLearningHub() {
+        if (!this.activeLearningSkill) {
+            const popularSkills = ['React', 'Python', 'Machine Learning', 'Data Science', 'Node.js', 'UI/UX', 'Cloud Computing', 'Cybersecurity', 'Algorithms'];
+            const profileGoals = store.profile.goals.join(' ').toLowerCase();
+            let targetSkill = popularSkills.find(s => profileGoals.includes(s.toLowerCase()));
+            this.activeLearningSkill = targetSkill || popularSkills[Math.floor(Math.random() * popularSkills.length)];
+        }
+
+        const encodedSkill = encodeURIComponent(this.activeLearningSkill + " full course tutorial");
+
+        return `
+            <div class="card glass-panel" style="display:flex; flex-direction:column; gap:1rem;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem;">
+                    <div style="flex: 1; min-width: 250px;">
+                        <h4 style="color:var(--brand-secondary); display:flex; align-items:center; gap:0.5rem;"><i data-lucide="book-open"></i> Core Focus Skill: <span style="color:var(--text-primary); text-transform:capitalize;">${this.activeLearningSkill}</span></h4>
+                        <p style="font-size:0.875rem; color:var(--text-secondary); margin-top:0.5rem;">Based on your career trajectory, we recommend systematically upgrading this skill. Or search for any specific custom skill right here to instantly discover curated global courses!</p>
+                    </div>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <input type="text" id="custom-skill-input" placeholder="Search any skill..." class="form-input" style="padding:0.5rem; width:200px;" value="${this.activeLearningSkill !== 'React' ? this.activeLearningSkill : ''}">
+                        <button class="btn btn-primary" id="search-skill-btn"><i data-lucide="search" style="width:16px; height:16px;"></i> Find Courses</button>
+                    </div>
+                </div>
+                
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; margin-top:0.5rem;">
+                    <a href="https://www.youtube.com/results?search_query=${encodedSkill}+highly+rated" target="_blank" class="btn btn-secondary" style="font-size:0.75rem; text-decoration:none; display:flex; align-items:center; gap:0.5rem; justify-content:center; border: 1px solid #ff000033; background: #ff00000a; color: #ff4444;">
+                        <i data-lucide="youtube" style="width:16px; height:16px;"></i> High-Rated YouTube Playlists
+                    </a>
+                    <a href="https://www.coursera.org/search?query=${encodeURIComponent(this.activeLearningSkill + " certification")}" target="_blank" class="btn btn-secondary" style="font-size:0.75rem; text-decoration:none; display:flex; align-items:center; gap:0.5rem; justify-content:center; border: 1px solid var(--brand-primary); background: rgba(59,130,246,0.05); color: var(--brand-primary);">
+                        <i data-lucide="award" style="width:16px; height:16px;"></i> Paid Global Certification
+                    </a>
+                    <a href="https://www.freecodecamp.org/news/search/?query=${encodeURIComponent(this.activeLearningSkill)}" target="_blank" class="btn btn-secondary" style="font-size:0.75rem; text-decoration:none; display:flex; align-items:center; gap:0.5rem; justify-content:center; border: 1px solid var(--success); background: rgba(16,185,129,0.05); color: var(--success);">
+                        <i data-lucide="code" style="width:16px; height:16px;"></i> Free Project Modules (fCC)
+                    </a>
+                </div>
+            </div>
+        `;
     }
 
     renderOpportunities() {
@@ -379,6 +420,20 @@ class App {
                 this.renderView(this.currentView);
             });
         });
+
+        const searchBtn = this.viewContainer.querySelector('#search-skill-btn');
+        if (searchBtn) {
+            searchBtn.addEventListener('click', () => {
+                const val = document.getElementById('custom-skill-input').value.trim();
+                if (val) {
+                    this.activeLearningSkill = val;
+                    this.renderView(this.currentView);
+                }
+            });
+            document.getElementById('custom-skill-input').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') searchBtn.click();
+            });
+        }
     }
 
     async openOpportunityDetailsModal(id) {

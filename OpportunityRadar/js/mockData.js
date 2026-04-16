@@ -1,5 +1,27 @@
 export let mockOpportunities = [
     {
+        id: 'opp-job1',
+        title: 'Junior Software Engineer',
+        company: 'LinkedIn Sourced: TechCorp',
+        type: 'Job',
+        location: 'Remote / Global',
+        deadline: 'Rolling Continuous',
+        tags: ['Job', 'Software', 'Full-time', 'React', 'Node.js'],
+        description: 'We are hiring a Junior Software Developer to join our core engineering team. You will be building scalable APIs and responsive frontend systems locally and abroad.',
+        matchScore: 95
+    },
+    {
+        id: 'opp-job2',
+        title: 'Python Backend Developer',
+        company: 'Indeed Sourced: DataStream Corp',
+        type: 'Job',
+        location: 'Hybrid',
+        deadline: '30th June 2026',
+        tags: ['Job', 'Python', 'Backend', 'Full-time'],
+        description: 'Looking for a Python developer experienced in Django/FastAPI and SQL databases to architect complex data pipelines and build robust backend systems natively.',
+        matchScore: 88
+    },
+    {
         id: 'opp-tworks',
         title: 'Hardware Innovation Hackathon',
         company: 'T-Works Telangana',

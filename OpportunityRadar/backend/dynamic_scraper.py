@@ -138,6 +138,14 @@ async def run_dynamic_scraper():
             "tags": ["Scholarship", "Funding", "Student"]
         },
         {
+            "url": "https://www.linkedin.com/jobs/search?keywords=Software%20Developer&location=Worldwide",
+            "item_selector": "div.base-card",
+            "title_selector": "h3.base-search-card__title",
+            "link_selector": "a.base-card__full-link",
+            "default_company": "LinkedIn listed Company",
+            "tags": ["Job", "Software", "Corporate", "Full-time"]
+        },
+        {
             "url": "https://www.linkedin.com/jobs/search?keywords=Software%20Intern&location=Worldwide",
             "item_selector": "div.base-card",
             "title_selector": "h3.base-search-card__title",
