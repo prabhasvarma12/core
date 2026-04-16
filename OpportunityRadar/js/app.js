@@ -31,6 +31,7 @@ class App {
         this.setupCursorTracker();
         this.setupNavigation();
         this.setupThemeToggle();
+        this.setupNotifications();
         this.renderView('dashboard');
 
         fetchLiveOpportunities().then(() => {
@@ -77,6 +78,53 @@ class App {
             const icon = this.themeToggle.querySelector('i');
             icon.setAttribute('data-lucide', newTheme === 'light' ? 'sun' : 'moon');
             lucide.createIcons();
+        });
+    }
+
+    setupNotifications() {
+        const notifBtn = document.getElementById('notifications-btn');
+        if (!notifBtn) return;
+
+        const newsData = [
+            { title: "OpenAI GPT-5 Structural Alpha Launched", desc: "Revolutionizing how students compile architectural research papers. Expected to vastly shift junior hiring paradigms.", time: "2 hours ago", type: "Tech" },
+            { title: "TCS & Infosys Announce 2026 Drive", desc: "Massive shift in entry-level hiring metrics. Over 30,000 freshers to be targeted specifically for specialized AI infrastructure roles natively.", time: "5 hours ago", type: "Jobs" },
+            { title: "DeepMind Open-Sources AlphaFold 3", desc: "A colossal breakthrough for bioinformatics researchers. New academic trajectories actively updating global fellowship priorities.", time: "1 day ago", type: "Research" }
+        ];
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'notifications-dropdown glass-panel';
+        dropdown.style.display = 'none';
+
+        let newsHTML = `<div style="padding: 1.25rem; border-bottom: 1px solid var(--border-light); font-weight:800; font-family:var(--font-display); font-size:1.15rem; color:var(--brand-primary); display:flex; align-items:center; gap:0.5rem;"><i data-lucide="zap" style="width:18px;height:18px;"></i> Radar Insights</div><div class="notif-scroll" style="max-height: 400px; overflow-y:auto;">`;
+
+        newsData.forEach(n => {
+            let color = n.type === 'Tech' ? 'var(--brand-primary)' : (n.type === 'Jobs' ? 'var(--success)' : '#8b5cf6');
+            newsHTML += `
+                <div style="padding: 1.25rem; border-bottom: 1px solid var(--border-light); cursor:pointer; transition: background 0.2s;" onmouseover="this.style.background='var(--border-light)'" onmouseout="this.style.background='transparent'">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                        <span style="font-size:0.7rem; font-weight:800; text-transform:uppercase; color:${color}; background:rgba(255,255,255,0.05); padding:3px 8px; border-radius:12px; border:1px solid ${color}44">${n.type}</span>
+                        <span style="font-size:0.7rem; color:var(--text-tertiary); font-weight:600;">${n.time}</span>
+                    </div>
+                    <div style="font-size:0.95rem; font-weight:700; margin-bottom:0.4rem; color:var(--text-primary); letter-spacing:-0.01em;">${n.title}</div>
+                    <div style="font-size:0.85rem; color:var(--text-secondary); line-height:1.5;">${n.desc}</div>
+                </div>
+            `;
+        });
+
+        dropdown.innerHTML = newsHTML + `</div>`;
+        const headerActions = document.querySelector('.header-actions');
+        if (headerActions) headerActions.appendChild(dropdown);
+
+        notifBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+            if (dropdown.style.display === 'block') lucide.createIcons(); // Instantiates Zap icon lazily
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!dropdown.contains(e.target) && !notifBtn.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
         });
     }
 
@@ -303,38 +351,71 @@ class App {
     }
 
     renderLearningHub() {
+        const popularSkills = ['React', 'Python', 'Machine Learning', 'Data Science', 'Node.js', 'UI/UX', 'Cloud Computing', 'Cybersecurity', 'Algorithms', 'Deep Learning', 'System Design'];
+
         if (!this.activeLearningSkill) {
-            const popularSkills = ['React', 'Python', 'Machine Learning', 'Data Science', 'Node.js', 'UI/UX', 'Cloud Computing', 'Cybersecurity', 'Algorithms'];
             const profileGoals = store.profile.goals.join(' ').toLowerCase();
             let targetSkill = popularSkills.find(s => profileGoals.includes(s.toLowerCase()));
             this.activeLearningSkill = targetSkill || popularSkills[Math.floor(Math.random() * popularSkills.length)];
         }
 
-        const encodedSkill = encodeURIComponent(this.activeLearningSkill + " full course tutorial");
+        const active = this.activeLearningSkill;
+        const uri = encodeURIComponent(active);
+
+        const suggestions = popularSkills.filter(s => s.toLowerCase() !== active.toLowerCase()).sort(() => 0.5 - Math.random()).slice(0, 4);
 
         return `
-            <div class="card glass-panel" style="display:flex; flex-direction:column; gap:1rem;">
+            <div class="card glass-panel" style="display:flex; flex-direction:column; gap:1.5rem; border: none; background: rgba(30,41,59,0.4);">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem;">
-                    <div style="flex: 1; min-width: 250px;">
-                        <h4 style="color:var(--brand-secondary); display:flex; align-items:center; gap:0.5rem;"><i data-lucide="book-open"></i> Core Focus Skill: <span style="color:var(--text-primary); text-transform:capitalize;">${this.activeLearningSkill}</span></h4>
-                        <p style="font-size:0.875rem; color:var(--text-secondary); margin-top:0.5rem;">Based on your career trajectory, we recommend systematically upgrading this skill. Or search for any specific custom skill right here to instantly discover curated global courses!</p>
+                    <div style="flex: 1; min-width: 300px;">
+                        <h4 style="color:var(--brand-secondary); display:flex; align-items:center; gap:0.5rem; font-size: 1.25rem;">
+                           <i data-lucide="book-open"></i> Focus Engine: <span style="color:var(--text-primary); text-transform:capitalize; background: var(--brand-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">${active}</span>
+                        </h4>
+                        <p style="font-size:0.9rem; color:var(--text-secondary); margin-top:0.5rem; max-width: 80%;">
+                           Algorithmically curated learning modules predicting exact architectural parity. Pivot focus using suggestions below or search natively.
+                        </p>
+                        <div style="display:flex; gap:0.5rem; margin-top: 1rem; flex-wrap: wrap;">
+                            ${suggestions.map(s => `<button class="btn btn-secondary filter-btn skill-chip" data-skill="${s}" style="font-size:0.75rem; padding: 0.3rem 0.75rem; border-color: rgba(255,255,255,0.1);"><i data-lucide="plus" style="width:12px; height:12px; display:inline-block; vertical-align:middle; margin-right:4px;"></i>${s}</button>`).join('')}
+                        </div>
                     </div>
-                    <div style="display:flex; gap:0.5rem; align-items:center;">
-                        <input type="text" id="custom-skill-input" placeholder="Search any skill..." class="form-input" style="padding:0.5rem; width:200px;" value="${this.activeLearningSkill !== 'React' ? this.activeLearningSkill : ''}">
-                        <button class="btn btn-primary" id="search-skill-btn"><i data-lucide="search" style="width:16px; height:16px;"></i> Find Courses</button>
+                    <div style="display:flex; gap:0.5rem; align-items:center; background: var(--bg-secondary); padding: 0.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border-light);">
+                        <input type="text" id="custom-skill-input" placeholder="Search any topic..." class="form-input" style="padding:0.5rem; width:220px; border:none; background:transparent;" value="${popularSkills.includes(active) ? '' : active}">
+                        <button class="btn btn-primary" id="search-skill-btn" style="border-radius: var(--radius-sm);"><i data-lucide="search" style="width:16px; height:16px;"></i> Find</button>
                     </div>
                 </div>
                 
-                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; margin-top:0.5rem;">
-                    <a href="https://www.youtube.com/results?search_query=${encodedSkill}+highly+rated" target="_blank" class="btn btn-secondary" style="font-size:0.75rem; text-decoration:none; display:flex; align-items:center; gap:0.5rem; justify-content:center; border: 1px solid #ff000033; background: #ff00000a; color: #ff4444;">
-                        <i data-lucide="youtube" style="width:16px; height:16px;"></i> High-Rated YouTube Playlists
-                    </a>
-                    <a href="https://www.coursera.org/search?query=${encodeURIComponent(this.activeLearningSkill + " certification")}" target="_blank" class="btn btn-secondary" style="font-size:0.75rem; text-decoration:none; display:flex; align-items:center; gap:0.5rem; justify-content:center; border: 1px solid var(--brand-primary); background: rgba(59,130,246,0.05); color: var(--brand-primary);">
-                        <i data-lucide="award" style="width:16px; height:16px;"></i> Paid Global Certification
-                    </a>
-                    <a href="https://www.freecodecamp.org/news/search/?query=${encodeURIComponent(this.activeLearningSkill)}" target="_blank" class="btn btn-secondary" style="font-size:0.75rem; text-decoration:none; display:flex; align-items:center; gap:0.5rem; justify-content:center; border: 1px solid var(--success); background: rgba(16,185,129,0.05); color: var(--success);">
-                        <i data-lucide="code" style="width:16px; height:16px;"></i> Free Project Modules (fCC)
-                    </a>
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top:1rem;">
+                    
+                    <!-- Free Platforms -->
+                    <div style="background: rgba(16,185,129,0.05); border: 1px solid rgba(16,185,129,0.2); padding: 1.5rem; border-radius: var(--radius-lg);">
+                        <h5 style="color: var(--success); margin-bottom: 1rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="globe"></i> Open & Free Ecosystems</h5>
+                        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+                            <a href="https://www.freecodecamp.org/news/search/?query=${uri}" target="_blank" class="btn btn-secondary" style="justify-content:flex-start; font-size:0.8rem; border-color:rgba(255,255,255,0.05);"><i data-lucide="terminal" style="width:14px;"></i> freeCodeCamp Modules</a>
+                            <a href="https://ocw.mit.edu/search/?q=${uri}" target="_blank" class="btn btn-secondary" style="justify-content:flex-start; font-size:0.8rem; border-color:rgba(255,255,255,0.05);"><i data-lucide="library" style="width:14px;"></i> MIT OpenCourseWare</a>
+                            <a href="https://www.edx.org/search?q=${uri}" target="_blank" class="btn btn-secondary" style="justify-content:flex-start; font-size:0.8rem; border-color:rgba(255,255,255,0.05);"><i data-lucide="award" style="width:14px;"></i> Harvard / edX Free Audit</a>
+                        </div>
+                    </div>
+
+                    <!-- YT Playlists -->
+                    <div style="background: rgba(239,68,68,0.05); border: 1px solid rgba(239,68,68,0.2); padding: 1.5rem; border-radius: var(--radius-lg);">
+                        <h5 style="color: var(--danger); margin-bottom: 1rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="youtube"></i> YouTube Core Mapping</h5>
+                        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+                            <a href="https://www.youtube.com/results?search_query=${uri}+full+course+10+hours" target="_blank" class="btn btn-secondary" style="justify-content:flex-start; font-size:0.8rem; border-color:rgba(255,255,255,0.05);"><i data-lucide="play-circle" style="width:14px;"></i> In-Depth Full Courses</a>
+                            <a href="https://www.youtube.com/results?search_query=${uri}+project+based+tutorial" target="_blank" class="btn btn-secondary" style="justify-content:flex-start; font-size:0.8rem; border-color:rgba(255,255,255,0.05);"><i data-lucide="code" style="width:14px;"></i> Project-Based Tutorials</a>
+                            <a href="https://www.youtube.com/results?search_query=${uri}+basics+crash+course+in+10+minutes" target="_blank" class="btn btn-secondary" style="justify-content:flex-start; font-size:0.8rem; border-color:rgba(255,255,255,0.05);"><i data-lucide="zap" style="width:14px;"></i> Quick Crash Courses</a>
+                        </div>
+                    </div>
+
+                    <!-- Paid Certificates -->
+                    <div style="background: rgba(59,130,246,0.05); border: 1px solid rgba(59,130,246,0.2); padding: 1.5rem; border-radius: var(--radius-lg);">
+                        <h5 style="color: var(--brand-primary); margin-bottom: 1rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="briefcase"></i> Premium Bootcamps</h5>
+                        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+                            <a href="https://www.coursera.org/search?query=${uri}+certification" target="_blank" class="btn btn-secondary" style="justify-content:flex-start; font-size:0.8rem; border-color:rgba(255,255,255,0.05);"><i data-lucide="award" style="width:14px;"></i> Coursera Specializations</a>
+                            <a href="https://www.udemy.com/courses/search/?q=${uri}" target="_blank" class="btn btn-secondary" style="justify-content:flex-start; font-size:0.8rem; border-color:rgba(255,255,255,0.05);"><i data-lucide="monitor" style="width:14px;"></i> Udemy Top Rated Blocks</a>
+                            <a href="https://www.pluralsight.com/search?q=${uri}" target="_blank" class="btn btn-secondary" style="justify-content:flex-start; font-size:0.8rem; border-color:rgba(255,255,255,0.05);"><i data-lucide="layers" style="width:14px;"></i> Pluralsight Skill Paths</a>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         `;
@@ -518,6 +599,13 @@ class App {
         filterBtns.forEach(btn => {
             btn.addEventListener('click', (e) => {
                 this.currentFilter = btn.getAttribute('data-type');
+                this.renderView(this.currentView);
+            });
+        });
+        const skillChips = this.viewContainer.querySelectorAll('.skill-chip');
+        skillChips.forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.activeLearningSkill = btn.getAttribute('data-skill');
                 this.renderView(this.currentView);
             });
         });

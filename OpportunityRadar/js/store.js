@@ -9,7 +9,7 @@ const store = {
         university: 'State University',
         branch: 'Computer Science',
         year: 'Junior',
-        cgpa: '3.8',
+        cgpa: '9.1',
         skills: ['JavaScript', 'React', 'Python', 'Machine Learning', 'Data Analysis'],
         goals: ['Find a Summer Internship', 'Gain practical AI experience'],
         resumeText: 'Experienced computer science student with a passion for web development and AI.'
