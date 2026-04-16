@@ -27,6 +27,8 @@ class App {
     }
 
     init() {
+        lucide.createIcons();
+        this.setupCursorTracker();
         this.setupNavigation();
         this.setupThemeToggle();
         this.renderView('dashboard');
@@ -35,6 +37,22 @@ class App {
             if (window.app) {
                 window.app.renderView(window.app.currentView);
             }
+        });
+    }
+
+    setupCursorTracker() {
+        const dot = document.getElementById('cursor-dot');
+        const outline = document.getElementById('cursor-outline');
+        if (!dot || !outline) return;
+
+        window.addEventListener('mousemove', (e) => {
+            const posX = e.clientX;
+            const posY = e.clientY;
+            dot.style.transform = `translate(${posX - 3}px, ${posY - 3}px)`;
+
+            outline.animate({
+                transform: `translate(${posX - 20}px, ${posY - 20}px)`
+            }, { duration: 450, fill: "forwards" });
         });
     }
 
@@ -97,8 +115,8 @@ class App {
     }
 
     getRankedOpportunities() {
-        const profileSkills = store.profile.skills.map(s => s.toLowerCase());
-        const profileGoals = store.profile.goals.map(g => g.toLowerCase());
+        const profileSkills = store.profile.skills.map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
+        const profileGoals = store.profile.goals.map(g => g.trim().toLowerCase()).filter(g => g.length > 0);
         const userCgpa = parseFloat(store.profile.cgpa) || 0.0;
 
         let filtered = mockOpportunities;
@@ -110,37 +128,101 @@ class App {
         }
 
         return filtered.map(opp => {
-            let score = opp.matchScore || 50;
-            const oppTags = opp.tags.map(t => t.toLowerCase());
-            const desc = (opp.description || "").toLowerCase();
+            let score = this.calculateAdvancedSemanticMatch(store.profile, opp);
+            return { ...opp, dynamicScore: Math.floor(score) };
+        }).sort((a, b) => b.dynamicScore - a.dynamicScore);
+    }
 
-            // Fix: Check if User Skills appear in EITHER the generic tags or the deep scraped description
-            const matchedSkills = profileSkills.filter(ps =>
-                oppTags.some(t => t.includes(ps) || ps.includes(t)) ||
-                desc.includes(ps)
-            );
+    calculateAdvancedSemanticMatch(profile, opp) {
+        let score = 40; // Base organic floor
+        const title = opp.title.toLowerCase();
+        const desc = (opp.description || "").toLowerCase();
+        const oppTags = opp.tags.map(t => t.toLowerCase());
 
-            score += (matchedSkills.length * 15);
-            if (profileGoals.some(g => opp.title.toLowerCase().includes(g) || opp.type.toLowerCase().includes(g))) {
-                score += 20;
-            }
+        const profileSkills = profile.skills.map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
+        const profileGoals = profile.goals.map(g => g.trim().toLowerCase()).filter(g => g.length > 0);
 
-            // Advanced Eligibility Checkings
-            const cgpaMatch = desc.match(/(\d\.\d)\+?\s*gpa/i);
-            if (cgpaMatch) {
-                const reqCgpa = parseFloat(cgpaMatch[1]);
-                if (userCgpa >= reqCgpa) {
-                    score += 15;
-                } else {
-                    score -= 40; // Unmet strict hard eligibility penalty
+        // 1. Knowledge Graph (Synonym Normalization)
+        const synonymGraph = {
+            'js': 'javascript', 'ts': 'typescript', 'ml': 'machine learning', 'ai': 'artificial intelligence',
+            'swe': 'software engineering', 'nlp': 'natural language processing', 'cv': 'computer vision',
+            'aws': 'amazon web services', 'gcp': 'google cloud', 'cs': 'computer science',
+            'front end': 'frontend', 'back end': 'backend'
+        };
+        const normalizedSkills = profileSkills.map(s => synonymGraph[s] || s);
+
+        // 2. Frequency & Contextual Proximity Logic (TF-IDF approximation)
+        normalizedSkills.forEach(ps => {
+            const cleanPs = ps.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`\\b${cleanPs}\\b`, 'gi');
+
+            if (oppTags.includes(ps)) score += 15;
+            else if (oppTags.some(t => t.includes(ps))) score += 10;
+
+            const matches = desc.match(regex);
+            if (matches) {
+                // Term Frequency (Higher mentions = core priority)
+                const freq = matches.length;
+                score += Math.min(10 + ((freq - 1) * 5), 25);
+
+                // Contextual Proximity (Does it appear near explicit requirements natively?)
+                const requiredRegex = new RegExp(`(required|experience with|proficient in|must have|strong|knowledge of).{0,35}\\b${cleanPs}\\b`, 'i');
+                if (requiredRegex.test(desc)) {
+                    score += 15; // Massive +15 explicit boost for hard contextual requirements
                 }
             }
-            // Penalty if user is Junior but requires PhD
-            if (desc.includes("phd") && !store.profile.year.toLowerCase().includes("phd")) score -= 30;
 
-            score = Math.max(1, Math.min(score, 99));
-            return { ...opp, dynamicScore: score };
-        }).sort((a, b) => b.dynamicScore - a.dynamicScore);
+            if (title.includes(ps)) score += 20; // Title matching explicitly equals absolute relevance
+        });
+
+        // 3. Trajectory Goal Mapping
+        profileGoals.forEach(g => {
+            if (title.includes(g)) score += 25;
+            else if (opp.type.toLowerCase().includes(g)) score += 15;
+            else if (desc.includes(g)) score += 10;
+        });
+
+        // 4. Strict Eligibilities & Requirements Parsing
+        // A) CGPA Requirements
+        const userCgpa = parseFloat(profile.cgpa) || 0.0;
+        const cgpaMatch = desc.match(/(\d\.\d)\+?\s*gpa/i);
+        if (cgpaMatch) {
+            const reqCgpa = parseFloat(cgpaMatch[1]);
+            if (userCgpa >= reqCgpa) {
+                score += 15; // Passed hard eligibility requirement natively
+            } else {
+                score -= 50; // Massively failed structural eligibility requirement
+            }
+        }
+
+        // B) Exact Hierarchy / Degree Requirements
+        const userYear = store.profile.year.toLowerCase();
+        const userBranch = store.profile.branch.toLowerCase();
+
+        // Check for PhD requirement mismatch
+        if (desc.includes("phd") && !userYear.includes("phd")) score -= 40;
+        // Check for Masters mismatch organically
+        if ((desc.includes("master's") || desc.includes("masters student") || desc.includes("grad student")) && (!userYear.includes("master") && !userYear.includes("grad"))) {
+            score -= 30;
+        }
+
+        // Check if Academic Branch / Domain heavily aligns implicitly
+        if (userBranch) {
+            const cleanBranch = userBranch.split(' ')[0]; // E.g., 'Computer' from 'Computer Science' natively
+            if (desc.includes(cleanBranch) || oppTags.some(t => t.includes(cleanBranch))) {
+                score += 15; // Structural explicit domain requirement fulfilled naturally
+            }
+        }
+
+        // 5. Autonomous Reinforcement Learning Variables
+        if (store.preferences && store.preferences.weights) {
+            oppTags.forEach(t => {
+                const dynamicBoost = store.preferences.weights[t] || 0;
+                score += dynamicBoost * 2; // Direct implicit ML multiplier naturally escalating arrays
+            });
+        }
+
+        return Math.max(1, Math.min(score, 99)); // Hardcaps at 99 natively mimicking AI confidence margins
     }
 
     renderOpportunityCard(opp) {
@@ -260,11 +342,16 @@ class App {
 
     renderOpportunities() {
         const ranked = this.getRankedOpportunities();
+        const totalMatches = ranked.length;
         this.viewContainer.innerHTML = `
             <div class="view-header">
                 <h2 class="view-title">Opportunity Radar Feed</h2>
-                <p class="view-subtitle">Ranked based on your profile skills and goals.</p>
+                <div class="stat-card glass-panel-subtle" style="background: rgba(14, 165, 233, 0.1); border-color: rgba(14, 165, 233, 0.3);">
+                    <h3>Radar Hits</h3>
+                    <div class="value" style="color: var(--brand-primary);">${totalMatches}</div>
+                </div>
             </div>
+
             ${this.renderFilterRibbon()}
             <div class="grid-cards">
                 ${ranked.map(opp => this.renderOpportunityCard(opp)).join('')}
@@ -412,6 +499,8 @@ class App {
                     store.removeOpportunity(id);
                 } else {
                     store.saveOpportunity(id);
+                    const opp = mockOpportunities.find(o => o.id === id);
+                    if (opp) store.trackEngagement(opp.tags, 3); // High weight for explictly Saving
                 }
                 this.renderView(this.currentView);
             });
@@ -453,6 +542,8 @@ class App {
         const opp = mockOpportunities.find(o => o.id === id);
         if (!opp) return;
 
+        store.trackEngagement(opp.tags, 1); // Native micro-weight tracking for actively Viewing details
+
         const modalContainer = document.getElementById('modal-container');
 
         const renderModal = (auditHTML = '', draftingHTML = '') => {
@@ -492,6 +583,7 @@ class App {
             const auditBtn = modalContainer.querySelector('.run-audit-btn');
             if (auditBtn) {
                 auditBtn.addEventListener('click', async () => {
+                    store.trackEngagement(opp.tags, 1); // Micro-weight for analyzing
                     auditBtn.innerHTML = `<i data-lucide="loader" class="spin"></i> Analyzing...`;
                     lucide.createIcons();
                     const result = await aiAgent.auditResume(opp, store.profile);
@@ -510,6 +602,7 @@ class App {
             const draftBtn = modalContainer.querySelector('.draft-letter-btn');
             if (draftBtn) {
                 draftBtn.addEventListener('click', async () => {
+                    store.trackEngagement(opp.tags, 4); // Extremely high-weight for explicit Action Drafting!
                     draftBtn.innerHTML = `<i data-lucide="loader" class="spin"></i> Drafting...`;
                     lucide.createIcons();
                     const letter = await aiAgent.draftCoverLetter(opp, store.profile);

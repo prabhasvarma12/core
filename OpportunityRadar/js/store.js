@@ -1,6 +1,7 @@
 // Local store for managing states
 const savedProfile = localStorage.getItem('opRadar_profile');
 const savedOpportunities = localStorage.getItem('opRadar_saved');
+const savedPrefs = localStorage.getItem('opRadar_prefs');
 
 const store = {
     profile: savedProfile ? JSON.parse(savedProfile) : {
@@ -14,6 +15,7 @@ const store = {
         resumeText: 'Experienced computer science student with a passion for web development and AI.'
     },
     savedOpportunities: savedOpportunities ? JSON.parse(savedOpportunities) : [],
+    preferences: savedPrefs ? JSON.parse(savedPrefs) : { weights: {} },
     engagementData: {
         viewedIds: [],
         appliedIds: []
@@ -52,6 +54,17 @@ const store = {
         if (!this.engagementData.viewedIds.includes(id)) {
             this.engagementData.viewedIds.push(id);
         }
+    },
+
+    trackEngagement(tags, weightInt) {
+        if (!this.preferences) this.preferences = { weights: {} };
+        tags.forEach(t => {
+            const tag = t.toLowerCase();
+            this.preferences.weights[tag] = (this.preferences.weights[tag] || 0) + weightInt;
+        });
+        localStorage.setItem('opRadar_prefs', JSON.stringify(this.preferences));
+        // We do not strictly need to notify() every micro-engagement to prevent aggressive re-renders,
+        // but the data will be used on the next natural render cycle!
     }
 };
 
