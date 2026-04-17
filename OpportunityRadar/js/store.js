@@ -15,6 +15,7 @@ const store = {
         resumeText: 'Experienced computer science student with a passion for web development and AI.'
     },
     savedOpportunities: savedOpportunities ? JSON.parse(savedOpportunities) : [],
+    dismissedOpportunities: localStorage.getItem('opRadar_dismissed') ? JSON.parse(localStorage.getItem('opRadar_dismissed')) : [],
     preferences: savedPrefs ? JSON.parse(savedPrefs) : { weights: {} },
     engagementData: {
         viewedIds: [],
@@ -48,6 +49,15 @@ const store = {
         this.savedOpportunities = this.savedOpportunities.filter(oppId => oppId !== id);
         localStorage.setItem('opRadar_saved', JSON.stringify(this.savedOpportunities));
         this.notify();
+    },
+
+    dismissOpportunity(id, tags) {
+        if (!this.dismissedOpportunities.includes(id)) {
+            this.dismissedOpportunities.push(id);
+            localStorage.setItem('opRadar_dismissed', JSON.stringify(this.dismissedOpportunities));
+            this.trackEngagement(tags, -4); // Negative vector subtraction for implicit Reinforcement Learning
+            this.notify();
+        }
     },
 
     markViewed(id) {

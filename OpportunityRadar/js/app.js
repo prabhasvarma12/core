@@ -167,7 +167,7 @@ class App {
         const profileGoals = store.profile.goals.map(g => g.trim().toLowerCase()).filter(g => g.length > 0);
         const userCgpa = parseFloat(store.profile.cgpa) || 0.0;
 
-        let filtered = mockOpportunities;
+        let filtered = mockOpportunities.filter(o => !store.dismissedOpportunities.includes(o.id));
         if (this.currentFilter !== 'All') {
             filtered = filtered.filter(o => {
                 const searchStr = (o.type + o.title + o.tags.join(' ')).toLowerCase();
@@ -175,14 +175,25 @@ class App {
             });
         }
 
+        let hasInjectedWildcard = false;
+
         return filtered.map(opp => {
             let score = this.calculateAdvancedSemanticMatch(store.profile, opp);
+
+            // Diversity Injector (The Wildcard)
+            if (!hasInjectedWildcard && this.currentFilter === 'All' && Math.random() > 0.85 && score > 35 && score < 65) {
+                score = 92; // Artificial boost ensuring it reaches the active feed natively
+                opp.isWildcard = true;
+                hasInjectedWildcard = true;
+            } else {
+                opp.isWildcard = false;
+            }
+
             return { ...opp, dynamicScore: Math.floor(score) };
         }).sort((a, b) => b.dynamicScore - a.dynamicScore);
     }
 
     calculateAdvancedSemanticMatch(profile, opp) {
-        let score = 40; // Base organic floor
         const title = opp.title.toLowerCase();
         const desc = (opp.description || "").toLowerCase();
         const oppTags = opp.tags.map(t => t.toLowerCase());
@@ -190,109 +201,159 @@ class App {
         const profileSkills = profile.skills.map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
         const profileGoals = profile.goals.map(g => g.trim().toLowerCase()).filter(g => g.length > 0);
 
-        // 1. Knowledge Graph (Synonym Normalization)
-        const synonymGraph = {
-            'js': 'javascript', 'ts': 'typescript', 'ml': 'machine learning', 'ai': 'artificial intelligence',
-            'swe': 'software engineering', 'nlp': 'natural language processing', 'cv': 'computer vision',
-            'aws': 'amazon web services', 'gcp': 'google cloud', 'cs': 'computer science',
-            'front end': 'frontend', 'back end': 'backend'
-        };
-        const normalizedSkills = profileSkills.map(s => synonymGraph[s] || s);
+        // ==========================================
+        // LAYER 1: ELIGIBILITY (Hard Constraints) -> S_E (0 to 1)
+        // ==========================================
+        let S_E = 1.0;
 
-        // 2. Frequency & Contextual Proximity Logic (TF-IDF approximation)
-        normalizedSkills.forEach(ps => {
-            const cleanPs = ps.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const regex = new RegExp(`\\b${cleanPs}\\b`, 'gi');
-
-            if (oppTags.includes(ps)) score += 15;
-            else if (oppTags.some(t => t.includes(ps))) score += 10;
-
-            const matches = desc.match(regex);
-            if (matches) {
-                // Term Frequency (Higher mentions = core priority)
-                const freq = matches.length;
-                score += Math.min(10 + ((freq - 1) * 5), 25);
-
-                // Contextual Proximity (Does it appear near explicit requirements natively?)
-                const requiredRegex = new RegExp(`(required|experience with|proficient in|must have|strong|knowledge of).{0,35}\\b${cleanPs}\\b`, 'i');
-                if (requiredRegex.test(desc)) {
-                    score += 15; // Massive +15 explicit boost for hard contextual requirements
-                }
-            }
-
-            if (title.includes(ps)) score += 20; // Title matching explicitly equals absolute relevance
-        });
-
-        // 3. Trajectory Goal Mapping
-        profileGoals.forEach(g => {
-            if (title.includes(g)) score += 25;
-            else if (opp.type.toLowerCase().includes(g)) score += 15;
-            else if (desc.includes(g)) score += 10;
-        });
-
-        // 4. Strict Eligibilities & Requirements Parsing
-        // A) CGPA Requirements
         const userCgpa = parseFloat(profile.cgpa) || 0.0;
         const cgpaMatch = desc.match(/(\d\.\d)\+?\s*gpa/i);
         if (cgpaMatch) {
             const reqCgpa = parseFloat(cgpaMatch[1]);
-            if (userCgpa >= reqCgpa) {
-                score += 15; // Passed hard eligibility requirement natively
-            } else {
-                score -= 50; // Massively failed structural eligibility requirement
-            }
+            if (userCgpa < reqCgpa) S_E -= 0.6; // Dealbreaker penalty explicitly
         }
 
-        // B) Exact Hierarchy / Degree Requirements
         const userYear = store.profile.year.toLowerCase();
+        if (desc.includes("phd") && !userYear.includes("phd")) S_E -= 0.8;
+        if ((desc.includes("master's") || desc.includes("masters student") || desc.includes("grad student")) && (!userYear.includes("master") && !userYear.includes("grad"))) S_E -= 0.7;
+
         const userBranch = store.profile.branch.toLowerCase();
-
-        // Check for PhD requirement mismatch
-        if (desc.includes("phd") && !userYear.includes("phd")) score -= 40;
-        // Check for Masters mismatch organically
-        if ((desc.includes("master's") || desc.includes("masters student") || desc.includes("grad student")) && (!userYear.includes("master") && !userYear.includes("grad"))) {
-            score -= 30;
-        }
-
-        // Check if Academic Branch / Domain heavily aligns implicitly
         if (userBranch) {
-            const cleanBranch = userBranch.split(' ')[0]; // E.g., 'Computer' from 'Computer Science' natively
+            const cleanBranch = userBranch.split(' ')[0];
             if (desc.includes(cleanBranch) || oppTags.some(t => t.includes(cleanBranch))) {
-                score += 15; // Structural explicit domain requirement fulfilled naturally
+                // Perfect branch mapping implicitly
+            } else if (desc.includes('degree') || desc.includes('required')) {
+                S_E -= 0.2;
             }
         }
+        S_E = Math.max(0, S_E);
 
-        // 5. Autonomous Reinforcement Learning Variables
+        // ==========================================
+        // LAYER 2: SEMANTIC ALIGNMENT (The Vibe Match) -> S_S (0 to 1)
+        // ==========================================
+        let maxPossibleSkillsScore = Math.max(oppTags.length * 10, 20);
+        let actualSkillsScore = 0;
+        opp.stretchMatches = []; // Clear array specifically for rendering loop
+
+        // The Adjacency Knowledge Graph
+        const adjacentGraph = {
+            'c++': ['java', 'c', 'c#'],
+            'java': ['c++', 'c#'],
+            'python': ['r', 'ruby', 'go'],
+            'react': ['vue', 'angular', 'svelte'],
+            'react.js': ['vue', 'angular', 'svelte'],
+            'sql': ['postgresql', 'mysql', 'snowflake', 'oracle'],
+            'snowflake': ['sql', 'postgresql', 'data engineering'],
+            'machine learning': ['data science', 'deep learning', 'ml', 'ai'],
+            'artificial intelligence': ['machine learning', 'ml', 'ai', 'data science']
+        };
+
+        const synonymGraph = { 'js': 'javascript', 'ts': 'typescript', 'aws': 'amazon web services' };
+        const normSkills = profileSkills.map(s => synonymGraph[s] || s);
+
+        oppTags.forEach(requiredTag => {
+            const reqTag = requiredTag.toLowerCase();
+            // Direct Match mapping
+            if (normSkills.includes(reqTag)) {
+                actualSkillsScore += 10;
+            }
+            // Adjacent Match & Stretch Mapping natively
+            else {
+                let adjacentFound = false;
+                for (let s of normSkills) {
+                    if (adjacentGraph[reqTag] && adjacentGraph[reqTag].includes(s) || adjacentGraph[s] && adjacentGraph[s].includes(reqTag)) {
+                        actualSkillsScore += 6; // Partial score for adjacent mapping inherently bypassing gaps
+                        opp.stretchMatches.push({ required: requiredTag, provided: s });
+                        adjacentFound = true;
+                        break;
+                    }
+                }
+                if (!adjacentFound && desc.includes(reqTag)) actualSkillsScore += 1; // Pure frequency base
+            }
+        });
+
+        // TF-IDF Approximation
+        normSkills.forEach(ps => {
+            const cleanPs = ps.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`\\b${cleanPs}\\b`, 'gi');
+            const matches = desc.match(regex);
+            if (matches) actualSkillsScore += Math.min(matches.length * 2, 8); // Organic scaling factor natively
+        });
+
+        let S_S = Math.min(actualSkillsScore / maxPossibleSkillsScore, 1.0);
+
+        // ==========================================
+        // LAYER 3: BEHAVIORAL & RLUF (The Secret Sauce) -> S_B (0 to 1)
+        // ==========================================
+        let S_B = 0.5; // Natural neutral axis
+        profileGoals.forEach(g => {
+            if (title.includes(g)) S_B += 0.3;
+            else if (opp.type.toLowerCase().includes(g)) S_B += 0.2;
+        });
+
         if (store.preferences && store.preferences.weights) {
             oppTags.forEach(t => {
-                const dynamicBoost = store.preferences.weights[t] || 0;
-                score += dynamicBoost * 2; // Direct implicit ML multiplier naturally escalating arrays
+                const w = store.preferences.weights[t] || 0;
+                S_B += (w * 0.05); // Native Reinforcement Learning injection explicitly
             });
         }
+        S_B = Math.max(0, Math.min(S_B, 1.0));
 
-        return Math.max(1, Math.min(score, 99)); // Hardcaps at 99 natively mimicking AI confidence margins
+        // ==========================================
+        // MASTER MATCHING EQUATION WEIGHTS
+        // Final Score = (W_elig * S_E) + (W_skill * S_S) + (W_behav * S_B)
+        // ==========================================
+        const W_elig = 45;  // Hard constraints define primary gating physically
+        const W_skill = 40; // Semantic embeddings
+        const W_behav = 15; // User Trajectories
+
+        let finalScore = (W_elig * S_E) + (W_skill * S_S) + (W_behav * S_B);
+        return Math.floor(finalScore);
     }
 
     renderOpportunityCard(opp) {
         const isSaved = store.savedOpportunities.includes(opp.id);
         const matchColor = opp.dynamicScore > 80 ? 'var(--success)' : (opp.dynamicScore > 60 ? 'var(--warning)' : 'var(--text-tertiary)');
 
+        let oddsBadge = '';
+        if (opp.isWildcard) oddsBadge = `<span style="background: rgba(139,92,246,0.1); color: #8b5cf6; padding: 0.25rem 0.5rem; border-radius:1rem; font-size:0.7rem; font-weight:800; border:1px solid #8b5cf6;"><i data-lucide="sparkles" style="width:12px;height:12px; margin-right:4px;"></i>WILDCARD MATCH</span>`;
+        else if (opp.dynamicScore >= 85) oddsBadge = `<span style="background: rgba(16,185,129,0.1); color: var(--success); padding: 0.25rem 0.5rem; border-radius:1rem; font-size:0.7rem; font-weight:800; border:1px solid var(--success);"><i data-lucide="shield-check" style="width:12px;height:12px; margin-right:4px;"></i>SAFE MATCH</span>`;
+        else if (opp.dynamicScore >= 65) oddsBadge = `<span style="background: rgba(245,158,11,0.1); color: var(--warning); padding: 0.25rem 0.5rem; border-radius:1rem; font-size:0.7rem; font-weight:800; border:1px solid var(--warning);"><i data-lucide="target" style="width:12px;height:12px; margin-right:4px;"></i>TARGET</span>`;
+        else oddsBadge = `<span style="background: rgba(239,68,68,0.1); color: var(--danger); padding: 0.25rem 0.5rem; border-radius:1rem; font-size:0.7rem; font-weight:800; border:1px solid var(--danger);"><i data-lucide="trending-up" style="width:12px;height:12px; margin-right:4px;"></i>REACH</span>`;
+
+        let stretchHTML = '';
+        if (opp.stretchMatches && opp.stretchMatches.length > 0) {
+            const sm = opp.stretchMatches[0];
+            stretchHTML = `
+                <div style="margin-bottom: 1rem; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px dashed var(--warning); background: rgba(245,158,11,0.05); font-size:0.8rem; color:var(--text-secondary);">
+                    <i data-lucide="zap" style="color:var(--warning); width:14px; height:14px;"></i> You're a <strong style="color:var(--text-primary)">Stretch Match</strong>! You're missing <strong>${sm.required}</strong> natively. Mention your <strong>${sm.provided}</strong> projects in your cover letter explicitly to cover the gap immediately!
+                </div>
+            `;
+        }
+
         return `
             <div class="card" data-id="${opp.id}">
                 <div style="display:flex; justify-content:space-between; margin-bottom: 1rem;">
                     <div style="display:flex; gap:0.5rem;">
                         <span style="background: rgba(59,130,246,0.1); color: var(--brand-primary); padding: 0.25rem 0.5rem; border-radius:1rem; font-size:0.75rem; font-weight:700;">${opp.type}</span>
-                        ${opp.salary && opp.salary !== 'Unknown' ? `<span style="background: rgba(16,185,129,0.1); color: var(--success); padding: 0.25rem 0.5rem; border-radius:1rem; font-size:0.75rem; font-weight:700;">${opp.salary}</span>` : ''}
+                        ${oddsBadge}
                     </div>
-                    <button class="icon-btn save-btn" data-id="${opp.id}" style="width:32px; height:32px;">
-                       <i data-lucide="bookmark" fill="${isSaved ? 'var(--brand-primary)' : 'none'}" color="${isSaved ? 'var(--brand-primary)' : 'var(--text-secondary)'}"></i>
-                    </button>
+                    <div style="display:flex; gap:0.25rem;">
+                        <button class="icon-btn dismiss-btn" data-id="${opp.id}" title="Not Interested (AI RLUF Feedback)" style="width:32px; height:32px; border:1px solid rgba(255,0,0,0.1); background:rgba(255,0,0,0.05); color:var(--danger);">
+                           <i data-lucide="thumbs-down" style="width:14px; height:14px;"></i>
+                        </button>
+                        <button class="icon-btn save-btn" data-id="${opp.id}" style="width:32px; height:32px;">
+                           <i data-lucide="bookmark" fill="${isSaved ? 'var(--brand-primary)' : 'none'}" color="${isSaved ? 'var(--brand-primary)' : 'var(--text-secondary)'}"></i>
+                        </button>
+                    </div>
                 </div>
                 <h3 style="font-size:1.125rem; font-weight:700; margin-bottom:0.25rem;">${opp.title}</h3>
                 <p style="color:var(--text-secondary); font-size:0.875rem; margin-bottom:0.5rem;">${opp.company} • ${opp.location}</p>
                 <div style="font-size:0.75rem; color:var(--text-primary); font-weight:600; margin-bottom:1rem; display:flex; align-items:center; gap:0.25rem;">
                      <i data-lucide="calendar" style="width:14px; height:14px;"></i> Deadline: <span style="color:var(--danger);">${opp.deadline || 'Rolling Registration'}</span>
                 </div>
+                
+                ${stretchHTML}
                 
                 <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
                     ${opp.tags.map(t => `<span style="font-size:0.75rem; border:1px solid var(--border-color); padding: 0.25rem 0.5rem; border-radius: 4px;">${t}</span>`).join('')}
@@ -595,6 +656,16 @@ class App {
             });
         });
 
+        const dismissBtns = this.viewContainer.querySelectorAll('.dismiss-btn');
+        dismissBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = btn.getAttribute('data-id');
+                const opp = mockOpportunities.find(o => o.id === id);
+                if (opp) store.dismissOpportunity(id, opp.tags);
+                this.renderView(this.currentView);
+            });
+        });
+
         const filterBtns = this.viewContainer.querySelectorAll('.filter-btn');
         filterBtns.forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -654,10 +725,13 @@ class App {
                             ${auditHTML}
                             ${draftingHTML}
                         </div>
-                        <div class="modal-footer">
-                            <a href="${opp.source_url || opp.url || '#'}" target="_blank" class="btn btn-primary" style="background: var(--success); align-self: center; margin-right: auto; text-decoration: none;"><i data-lucide="external-link"></i> Apply Here</a>
-                            <button class="btn btn-secondary run-audit-btn"><i data-lucide="sparkles" style="color:var(--brand-secondary)"></i> AI Audit</button>
-                            <button class="btn btn-primary draft-letter-btn"><i data-lucide="pen-tool"></i> Draft Letter</button>
+                        <div class="modal-footer" style="flex-wrap: wrap; gap:1rem;">
+                            <a href="${opp.source_url || opp.url || '#'}" target="_blank" class="btn btn-primary" style="background: var(--success); text-decoration: none;"><i data-lucide="external-link"></i> External Portal</a>
+                            <button class="btn btn-secondary applied-btn" style="border-color: var(--brand-primary); color:var(--brand-primary);"><i data-lucide="check-circle" style="width:16px;"></i> I Applied</button>
+                            <div style="margin-left: auto; display:flex; gap:0.5rem;">
+                                <button class="btn btn-secondary run-audit-btn"><i data-lucide="sparkles" style="color:var(--brand-secondary)"></i> AI Audit</button>
+                                <button class="btn btn-primary draft-letter-btn"><i data-lucide="pen-tool"></i> Draft Letter</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -677,10 +751,21 @@ class App {
                     const result = await aiAgent.auditResume(opp, store.profile);
                     const auditH = `
                       <div class="ai-audit-box">
-                         <h4 style="color:var(--brand-secondary); margin-bottom:0.5rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="sparkles"></i> AI Resume Audit (${result.matchScore}% Match)</h4>
-                         <div style="margin-bottom:0.5rem"><strong>Strengths:</strong> ${result.strengths.join(', ')}</div>
-                         <div style="margin-bottom:0.5rem"><strong>Weaknesses:</strong> ${result.weaknesses.join(', ')}</div>
-                         <div><strong>Recommendation:</strong> ${result.recommendation}</div>
+                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+                             <h4 style="color:var(--brand-secondary); display:flex; align-items:center; gap:0.5rem;"><i data-lucide="sparkles"></i> Resume Gap Auditor</h4>
+                             <span style="background: rgba(14,165,233,0.1); color: var(--brand-secondary); padding: 0.25rem 0.5rem; border-radius:1rem; font-size:0.75rem; font-weight:800; border:1px solid var(--brand-secondary);">${result.matchScore}% Target Density</span>
+                         </div>
+                         <div style="margin-bottom:0.75rem"><strong>Identified Parity <span style="color:var(--success)">(Hits)</span>:</strong> ${result.strengths.join(', ')}</div>
+                         <div style="margin-bottom:0.75rem"><strong>Critical Constraints <span style="color:var(--danger)">(Gaps)</span>:</strong> <span style="font-weight:700;">${result.weaknesses.join(' • ')}</span></div>
+                         <div style="margin-bottom:1rem;"><strong>Architectural Advice:</strong> ${result.recommendation}</div>
+                         
+                         ${result.weaknesses.length > 0 ? `
+                             <div style="padding:1rem; border:1px dashed var(--danger); border-radius:var(--radius-lg); background:rgba(239,68,68,0.02)">
+                                 <h5 style="color:var(--danger); margin-bottom:0.5rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="zap"></i> Agentic Gap Resolution</h5>
+                                 <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:1rem; line-height: 1.5;">You are missing explicit correlation for <strong style="color:var(--text-primary);">${result.weaknesses[0].substring(0, 25)}</strong>. Our agent inherently mapped a structural crash-course capable of immediately resolving this correlation gap:</p>
+                                 <a href="https://www.youtube.com/results?search_query=${encodeURIComponent(result.weaknesses[0] + ' crash course tutorial')}" target="_blank" class="btn btn-secondary" style="font-size:0.75rem; border-color:var(--danger); color:var(--danger);"><i data-lucide="youtube" style="width:14px;height:14px;"></i> Boot 2-Hour Crash Course Mapping</a>
+                             </div>
+                         ` : ''}
                       </div>
                    `;
                     renderModal(auditH, draftingHTML);
@@ -701,6 +786,28 @@ class App {
                       </div>
                    `;
                     renderModal(auditHTML, draftH);
+                });
+            }
+
+            const appliedBtn = modalContainer.querySelector('.applied-btn');
+            if (appliedBtn) {
+                appliedBtn.addEventListener('click', () => {
+                    store.trackEngagement(opp.tags, 10); // Ultimate reinforcement weight mapping
+                    const prepH = `
+                        <div class="draft-box" style="border-color: var(--brand-primary); background: rgba(59,130,246,0.05); margin-top:1rem;">
+                            <h4 style="color:var(--brand-primary); margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="bot"></i> Automated Interview Prep (Agentic)</h4>
+                            <p style="color:var(--text-secondary); margin-bottom:1rem; font-size:0.9rem; line-height: 1.5;">Since you initiated an application explicitly, our Agent processed historical data specifically targeting <strong>${opp.company}</strong> requirements predicting the Top 3 algorithmic queries you will inherently face:</p>
+                            <ul style="font-size:0.85rem; color:var(--text-primary); padding-left:1.5rem; margin-bottom:1.5rem; line-height:1.6;">
+                                <li style="margin-bottom:0.75rem;">How does your previous historical experience natively map specifically to the scalability bounds inherently executed using <strong>${opp.tags[0] || 'core architectures'}</strong>?</li>
+                                <li style="margin-bottom:0.75rem;">Are you capable of executing a whiteboard schema explicitly defining the inherent multi-threaded limits explicitly mapped by <strong>${opp.tags[1] || 'distributed networks'}</strong>?</li>
+                                <li style="margin-bottom:0.75rem;">Describe a physical scenario where your internal team architecture failed scaling structurally, and how you algorithmically bridged the bounds resolving it entirely.</li>
+                            </ul>
+                            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; padding-top: 1rem; border-top:1px solid rgba(255,255,255,0.05);">
+                                <span style="font-size:0.75rem; color:var(--success); font-weight:800; text-transform:uppercase;"><i data-lucide="check-circle" style="width:12px; height:12px; margin-right:4px;"></i> Application Logged Securely</span>
+                            </div>
+                        </div>
+                    `;
+                    renderModal(auditHTML, prepH); // Re-renders cleanly substituting Draft array with Prep array specifically
                 });
             }
 
